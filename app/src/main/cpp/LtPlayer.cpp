@@ -167,7 +167,7 @@ void LtPlayer::start_() {
             if (video_channel && video_channel->stream_index == packet->stream_index) {
                 video_channel->packets.insertToQueue(packet);
             } else if (audio_channel && audio_channel->stream_index == packet->stream_index) {
-//                audio_channel->packets.insertToQueue(packet);
+                audio_channel->packets.insertToQueue(packet);
             }
         } else if (result > 0) {
 //            TODO if (helper) {
