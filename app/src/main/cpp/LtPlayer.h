@@ -18,11 +18,13 @@ extern "C" {
 class LtPlayer {
 private:
     char *data_source = nullptr;
-    pthread_t pid{};
+    pthread_t pid_prepare;
+    pthread_t pid_start;
     AVFormatContext *formatContext = nullptr;
     AudioChannel *audio_channel = nullptr;
     VideoChannel *video_channel = nullptr;
     JNICallbakcHelper *helper;
+    bool playing = false;
 
 public:
     LtPlayer(const char *data_source, JNICallbakcHelper *helper);
@@ -34,6 +36,9 @@ public:
 
     void prepare_();
     void start();
+
+
+    void start_();
 
 
 };

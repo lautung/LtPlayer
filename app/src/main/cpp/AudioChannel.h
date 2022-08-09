@@ -6,10 +6,18 @@
 #define LTPLAYER_AUDIOCHANNEL_H
 
 
-class AudioChannel {
+#include "BaseChannel.h"
+
+class AudioChannel: public BaseChannel{
 
 public:
-    AudioChannel();
+    AudioChannel(int stream_index, AVCodecContext * codecContext);
+
+    virtual ~AudioChannel();
+
+    void start();
+
+    void stop();
 };
 
 

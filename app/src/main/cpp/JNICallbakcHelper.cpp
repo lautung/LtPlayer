@@ -6,8 +6,9 @@ JNICallbakcHelper::JNICallbakcHelper(JavaVM *vm, JNIEnv *env, jobject job) {
     // this->job = job; //jobject不能跨越线程，不能跨越函数，必须全局引用
     this->job = env->NewGlobalRef(job); // 提示全局引用 解决
 
-    jclass derryPlayerKTClass = env->GetObjectClass(job);
-    jmd_prepared = env->GetMethodID(derryPlayerKTClass, "onPrepared", "()V");
+    jclass playerKTClass = env->GetObjectClass(job);
+    jmd_prepared = env->GetMethodID(playerKTClass, "onPrepared", "()V");
+    jmd_onError=env->GetMethodID(playerKTClass,"onError","(ILjava/lang/String;)V");
 }
 
 JNICallbakcHelper::~JNICallbakcHelper() {
@@ -28,6 +29,23 @@ void JNICallbakcHelper::onPrepared(int thread_mode) {
         env_child->CallVoidMethod(job, jmd_prepared);
         vm->DetachCurrentThread();
     }
+}
+
+void JNICallbakcHelper::onError(int thread_mode, int error_code, char *ffmpegError) {
+    if (thread_mode == THREAD_MAIN) {
+        //主线程
+        jstring ffmpegError_ = env->NewStringUTF(ffmpegError);
+        env->CallVoidMethod(job, jmd_onError, error_code, ffmpegError_);
+    } else {
+        //子线程
+        //当前子线程的 JNIEnv
+        JNIEnv *env_child;
+        vm->AttachCurrentThread(&env_child, nullptr);
+        jstring ffmpegError_ = env_child->NewStringUTF(ffmpegError);
+        env_child->CallVoidMethod(job, jmd_onError, error_code, ffmpegError_);
+        vm->DetachCurrentThread();
+    }
+
 }
 
 

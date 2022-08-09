@@ -1,7 +1,9 @@
 package com.lautung.ltplayer
 
 import android.Manifest
+import android.annotation.SuppressLint
 import android.content.pm.PackageManager
+import android.graphics.Color
 import androidx.appcompat.app.AppCompatActivity
 import android.os.Bundle
 import android.os.Environment
@@ -19,6 +21,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var binding: ActivityMainBinding
 
     private lateinit var player: LtPlayer
+    private lateinit var tvState: TextView
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -29,7 +32,7 @@ class MainActivity : AppCompatActivity() {
 
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
-        Log.e("aa", File(getExternalFilesDir(""), "demo.mp4").absolutePath)
+        tvState = binding.tvState;
         player = LtPlayer(this)
 
         player.setMediaDataSource(
@@ -40,9 +43,21 @@ class MainActivity : AppCompatActivity() {
         player.setOnPreparedListener(object : LtPlayer.OnPreparedListener {
             override fun onPrepared() {
                 runOnUiThread {
-                    Toast.makeText(this@MainActivity, "准备成功，即将开始播放", Toast.LENGTH_SHORT).show();
+                    tvState.setTextColor(Color.GREEN) // 绿色
+                    tvState.text = "恭喜init初始化成功"
                 }
                 player.start() // 调用C++ 开始播放
+            }
+        })
+
+        player.setOnErrorListener(object : LtPlayer.OnErrorListener {
+
+            @SuppressLint("SetTextI18n")
+            override fun onError(errorCode: String?) {
+                runOnUiThread { // Toast.makeText(MainActivity.this, "出错了，错误详情是:" + errorInfo, Toast.LENGTH_SHORT).show();
+                    tvState?.setTextColor(Color.RED) // 红色
+                    tvState?.text = errorCode
+                }
             }
         })
 

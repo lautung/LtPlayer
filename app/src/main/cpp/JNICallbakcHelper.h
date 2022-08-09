@@ -15,6 +15,7 @@ private:
     JNIEnv *env = 0; // 主线程 调用 Kotlin 用的
     jobject job; // 为了更好的寻找到 DerryPlayer.kt实例
     jmethodID jmd_prepared;
+    jmethodID jmd_onError;
 
 public:
     JNICallbakcHelper(JavaVM *vm, JNIEnv *env, jobject job);
@@ -22,6 +23,9 @@ public:
     virtual ~JNICallbakcHelper();
 
     void onPrepared(int thread_mode);
+    void onError(int thread_mode, int error_code, char * ffmpegError);
+
+
 };
 
 #endif //DERRYPLAYER_JNICALLBAKCHELPER_H
