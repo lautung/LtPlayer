@@ -124,6 +124,7 @@ void LtPlayer::prepare_() {
             audio_channel = new AudioChannel(stream_index, codecContext);
         } else if (parameters->codec_type == AVMediaType::AVMEDIA_TYPE_VIDEO) { // 视频
             video_channel = new VideoChannel(stream_index, codecContext);
+            video_channel->setRenderCallback(renderCallback);
         }
 
     }//for end
@@ -199,5 +200,9 @@ void LtPlayer::start() {
     }
     // prepare 需要占用大量的资源，不允许占用主线程
     pthread_create(&pid_prepare, 0, start_onThread, this);
+}
+
+void LtPlayer::setRenderCallback(RenderCallback callback) {
+    this->renderCallback = callback;
 }
 

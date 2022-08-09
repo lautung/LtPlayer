@@ -1,11 +1,14 @@
 package com.lautung.ltplayer
 
+import android.view.Surface
+import android.view.SurfaceHolder
+import android.view.SurfaceView
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleObserver
 import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.OnLifecycleEvent
 
-class LtPlayer(lifecycleOwner: LifecycleOwner) : LifecycleObserver {
+class LtPlayer(lifecycleOwner: LifecycleOwner) : SurfaceHolder.Callback, LifecycleObserver {
 
     init {
         lifecycleOwner.lifecycle.addObserver(this)
@@ -54,12 +57,20 @@ class LtPlayer(lifecycleOwner: LifecycleOwner) : LifecycleObserver {
 
     private var onErrorListener: OnErrorListener? = null
 
+    private var surfaceHolder: SurfaceHolder? = null
+
     private var nativeObj: Long? = null
 
     private var mediaDataSource: String = ""
 
     fun setMediaDataSource(mediaDataSource: String) {
         this.mediaDataSource = mediaDataSource
+    }
+
+    fun setSurfaceView(surfaceView: SurfaceView) {
+        surfaceHolder?.removeCallback(this)
+        surfaceHolder = surfaceView.holder
+        surfaceHolder?.addCallback(this)
     }
 
 
@@ -69,17 +80,17 @@ class LtPlayer(lifecycleOwner: LifecycleOwner) : LifecycleObserver {
     }
 
     fun start() {
-        startNative(nativeObj)
+        nativeObj?.let { startNative(it) }
     }
 
     @OnLifecycleEvent(Lifecycle.Event.ON_RESUME)
     fun stop() {
-        stopNative(nativeObj)
+        nativeObj?.let { stopNative(it) }
     }
 
     @OnLifecycleEvent(Lifecycle.Event.ON_DESTROY)
     fun release() {
-        releaseNative(nativeObj)
+        nativeObj?.let { releaseNative(it) }
     }
 
     // 写一个函数，给C++调用
@@ -138,12 +149,24 @@ class LtPlayer(lifecycleOwner: LifecycleOwner) : LifecycleObserver {
         this.onErrorListener = onErrorListener
     }
 
-    private external fun releaseNative(nativeObj: Long?)
+    private external fun releaseNative(nativeObj: Long)
 
-    private external fun startNative(nativeObj: Long?)
+    private external fun startNative(nativeObj: Long)
 
-    private external fun stopNative(nativeObj: Long?)
+    private external fun stopNative(nativeObj: Long)
 
     private external fun prepareNative(mediaDataSource: String): Long
+
+    private external fun setSurfaceNative(nativeObj: Long, surface: Surface)
+
+
+    override fun surfaceCreated(p0: SurfaceHolder) {}
+
+    override fun surfaceChanged(p0: SurfaceHolder, p1: Int, p2: Int, p3: Int) {
+        surfaceHolder?.surface?.let { nativeObj?.let { it1 -> setSurfaceNative(it1, it) } }
+    }
+
+
+    override fun surfaceDestroyed(p0: SurfaceHolder) {}
 
 }

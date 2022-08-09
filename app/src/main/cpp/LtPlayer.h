@@ -25,6 +25,7 @@ private:
     VideoChannel *video_channel = nullptr;
     JNICallbakcHelper *helper;
     bool playing = false;
+    RenderCallback renderCallback;
 
 public:
     LtPlayer(const char *data_source, JNICallbakcHelper *helper);
@@ -35,10 +36,13 @@ public:
 
 
     void prepare_();
+
     void start();
 
 
     void start_();
+
+    void setRenderCallback(RenderCallback callback);
 
 
 };

@@ -8,6 +8,7 @@ import androidx.appcompat.app.AppCompatActivity
 import android.os.Bundle
 import android.os.Environment
 import android.util.Log
+import android.view.SurfaceView
 import android.view.WindowManager
 import android.widget.TextView
 import android.widget.Toast
@@ -22,6 +23,7 @@ class MainActivity : AppCompatActivity() {
 
     private lateinit var player: LtPlayer
     private lateinit var tvState: TextView
+    private lateinit var surfaceView: SurfaceView
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -32,9 +34,10 @@ class MainActivity : AppCompatActivity() {
 
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
-        tvState = binding.tvState;
+        tvState = binding.tvState
+        surfaceView = binding.surfaceView
         player = LtPlayer(this)
-
+        player.setSurfaceView(surfaceView)
         player.setMediaDataSource(
             File(getExternalFilesDir(""), "demo.mp4").absolutePath
         )
