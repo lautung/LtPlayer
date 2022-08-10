@@ -199,7 +199,7 @@ void LtPlayer::start() {
         audio_channel->start();
     }
     // prepare 需要占用大量的资源，不允许占用主线程
-    pthread_create(&pid_prepare, 0, start_onThread, this);
+    pthread_create(&pid_prepare, nullptr, start_onThread, this);
 }
 
 void LtPlayer::setRenderCallback(RenderCallback callback) {
