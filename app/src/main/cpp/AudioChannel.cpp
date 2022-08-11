@@ -2,10 +2,11 @@
 // Created by lautung on 2022/8/9.
 //
 
+
 #include "AudioChannel.h"
 
 AudioChannel::AudioChannel(int stream_index, AVCodecContext *codecContext)
-    :BaseChannel(stream_index, codecContext) {
+        : BaseChannel(stream_index, codecContext) {
     // 音频三要素
     /*
      * 1.采样率  44100 48000
@@ -35,7 +36,8 @@ AudioChannel::AudioChannel(int stream_index, AVCodecContext *codecContext)
 
     // AV_SAMPLE_FMT_S16: 位声、采用格式大小，存放大小
 
-    out_channels = av_get_channel_layout_nb_channels(AV_CH_LAYOUT_STEREO); // STEREO:双声道类型 == 获取 声道数 2
+    out_channels = av_get_channel_layout_nb_channels(
+            AV_CH_LAYOUT_STEREO); // STEREO:双声道类型 == 获取 声道数 2
     out_sample_size = av_get_bytes_per_sample(AV_SAMPLE_FMT_S16); // 每个sample是16 bit == 2字节
     out_sample_rate = 44100; // 采样率
 
@@ -44,17 +46,17 @@ AudioChannel::AudioChannel(int stream_index, AVCodecContext *codecContext)
     out_buffers = static_cast<uint8_t *>(malloc(out_buffers_size)); // 堆区开辟而已
 
     // FFmpeg 音频 重采样  音频重采样上下文 第四个
-    swr_ctx  = swr_alloc_set_opts(0,
+    swr_ctx = swr_alloc_set_opts(0,
             // 下面是输出环节
-                                  AV_CH_LAYOUT_STEREO,  // 声道布局类型 双声道
-                                  AV_SAMPLE_FMT_S16,  // 采样大小 16bit
-                                  out_sample_rate, // 采样率  44100
+                                 AV_CH_LAYOUT_STEREO,  // 声道布局类型 双声道
+                                 AV_SAMPLE_FMT_S16,  // 采样大小 16bit
+                                 out_sample_rate, // 采样率  44100
 
             // 下面是输入环节
-                                  codecContext->channel_layout, // 声道布局类型
-                                  codecContext->sample_fmt, // 采样大小 32bit  aac
-                                  codecContext->sample_rate,  // 采样率
-                                  0, 0);
+                                 codecContext->channel_layout, // 声道布局类型
+                                 codecContext->sample_fmt, // 采样大小 32bit  aac
+                                 codecContext->sample_rate,  // 采样率
+                                 0, 0);
     // 初始化 重采样上下文
     swr_init(swr_ctx);
 }
@@ -72,6 +74,15 @@ void *task_audio_decode(void *args) {
 void AudioChannel::audio_decode() {
     AVPacket *pkt = nullptr;
     while (isPlaying) {
+
+        /*
+        *
+        */
+        if (isPlaying && frames.size() > 100) {
+            av_usleep(10 * 100);
+            continue;
+        }
+
         int ret = packets.getQueueAndDel(pkt); // 阻塞式函数
         if (!isPlaying) {
             break; // 如果关闭了播放，跳出循环，releaseAVPacket(&pkt);
@@ -83,8 +94,6 @@ void AudioChannel::audio_decode() {
 
         ret = avcodec_send_packet(codecContext, pkt); // 第一步：把我们的 压缩包 AVPack发送给 FFmpeg缓存区
 
-        // FFmpeg源码内部 缓存了一份pkt副本，所以我才敢大胆的释放
-        releaseAVPacket(&pkt);
 
         if (ret) { // r != 0
             break; // avcodec_send_packet 出现了错误，结束循环
@@ -97,12 +106,20 @@ void AudioChannel::audio_decode() {
         if (ret == AVERROR(EAGAIN)) {
             continue; // 有可能音频正，也会获取失败，重新拿一次
         } else if (ret != 0) {
+            if (frame){
+                releaseAVFrame(&frame); //当出错时，切记要释放frame
+            }
             break; // 出错误了
         }
         // 终于拿到 原始包了，加入队列-- PCM数据
         frames.insertToQueue(frame);
+
+        av_packet_free(&pkt);
+//        av_packet_unref(pkt);
+//        releaseAVPacket(&pkt);
     } // while end
 
+    av_packet_unref(pkt);
     releaseAVPacket(&pkt);
 }
 
@@ -118,7 +135,7 @@ void *task_audio_play(void *args) {
  * @param bq  队列
  * @param args  this // 给回调函数的参数
  */
-void bqPlayerCallback(SLAndroidSimpleBufferQueueItf bq, void * args) {
+void bqPlayerCallback(SLAndroidSimpleBufferQueueItf bq, void *args) {
     auto *audio_channel = static_cast<AudioChannel *>(args);
     int pcm_size = audio_channel->getPCM(); // pcm_data_size == pcm_size
 
@@ -168,14 +185,16 @@ void AudioChannel::audio_play() {
      * TODO 2.设置混音器
     */
     // 2.1 创建混音器
-    result = (*engineInterface)->CreateOutputMix(engineInterface, &outputMixObject, 0, 0, 0); // 环境特效，混响特效，.. 都不需要
+    result = (*engineInterface)->CreateOutputMix(engineInterface, &outputMixObject, 0, 0,
+                                                 0); // 环境特效，混响特效，.. 都不需要
     if (SL_RESULT_SUCCESS != result) {
         LOGD("创建混音器 CreateOutputMix failed");
         return;
     }
 
     // 2.2 初始化混音器
-    result = (*outputMixObject)->Realize(outputMixObject, SL_BOOLEAN_FALSE); // SL_BOOLEAN_FALSE:延时等待你创建成功
+    result = (*outputMixObject)->Realize(outputMixObject,
+                                         SL_BOOLEAN_FALSE); // SL_BOOLEAN_FALSE:延时等待你创建成功
     if (SL_RESULT_SUCCESS != result) {
         LOGD("初始化混音器 (*outputMixObject)->Realize failed");
         return;
@@ -228,7 +247,8 @@ void AudioChannel::audio_play() {
 
     // 3.2 配置音轨（输出）
     // 设置混音器
-    SLDataLocator_OutputMix loc_outmix = {SL_DATALOCATOR_OUTPUTMIX, outputMixObject}; // SL_DATALOCATOR_OUTPUTMIX:输出混音器类型
+    SLDataLocator_OutputMix loc_outmix = {SL_DATALOCATOR_OUTPUTMIX,
+                                          outputMixObject}; // SL_DATALOCATOR_OUTPUTMIX:输出混音器类型
     SLDataSink audioSnk = {&loc_outmix, NULL}; // outmix最终混音器的成果，给后面代码使用
     // 需要的接口 操作队列的接口
     const SLInterfaceID ids[1] = {SL_IID_BUFFERQUEUE};
@@ -252,7 +272,8 @@ void AudioChannel::audio_play() {
     }
 
     // 3.4 初始化播放器：SLObjectItf bqPlayerObject
-    result = (*bqPlayerObject)->Realize(bqPlayerObject, SL_BOOLEAN_FALSE);  // SL_BOOLEAN_FALSE:延时等待你创建成功
+    result = (*bqPlayerObject)->Realize(bqPlayerObject,
+                                        SL_BOOLEAN_FALSE);  // SL_BOOLEAN_FALSE:延时等待你创建成功
     if (SL_RESULT_SUCCESS != result) {
         LOGD("实例化播放器 CreateAudioPlayer failed!");
         return;
@@ -260,7 +281,8 @@ void AudioChannel::audio_play() {
     LOGD("创建播放器 CreateAudioPlayer success!");
 
     // 3.5 获取播放器接口 【以后播放全部使用 播放器接口去干（核心）】
-    result = (*bqPlayerObject)->GetInterface(bqPlayerObject, SL_IID_PLAY, &bqPlayerPlay); // SL_IID_PLAY:播放接口 == iplayer
+    result = (*bqPlayerObject)->GetInterface(bqPlayerObject, SL_IID_PLAY,
+                                             &bqPlayerPlay); // SL_IID_PLAY:播放接口 == iplayer
     if (SL_RESULT_SUCCESS != result) {
         LOGD("获取播放接口 GetInterface SL_IID_PLAY failed!");
         return;
@@ -271,7 +293,8 @@ void AudioChannel::audio_play() {
     * TODO 4.设置回调函数
     */
     // 4.1 获取播放器队列接口：SLAndroidSimpleBufferQueueItf bqPlayerBufferQueue  // 播放需要的队列
-    result = (*bqPlayerObject)->GetInterface(bqPlayerObject, SL_IID_BUFFERQUEUE, &bqPlayerBufferQueue);
+    result = (*bqPlayerObject)->GetInterface(bqPlayerObject, SL_IID_BUFFERQUEUE,
+                                             &bqPlayerBufferQueue);
     if (result != SL_RESULT_SUCCESS) {
         LOGD("获取播放队列 GetInterface SL_IID_BUFFERQUEUE failed!");
         return;
@@ -324,7 +347,8 @@ int AudioChannel::getPCM() { // 此函数会一直被 缓存队列bq 来调用�
     // 获取PCM数据
     // PCM数据在哪里？答：队列 frames队列中  frame->data == PCM数据(待 重采样  未重采样的  32bit采用格式 44100采样率 2声道)
 
-    AVFrame * frame = nullptr;
+    AVFrame *frame = nullptr;
+
     while (isPlaying) {
         int ret = frames.getQueueAndDel(frame);
         if (!isPlaying) {
@@ -338,7 +362,8 @@ int AudioChannel::getPCM() { // 此函数会一直被 缓存队列bq 来调用�
 
         // 来源：10个48000   ---->  目标:44100  11个44100
         // 获取单通道的样本数 (计算目标样本数： ？ 10个48000 --->  48000/44100因为除不尽  11个44100)
-        int dst_nb_samples = av_rescale_rnd(swr_get_delay(swr_ctx, frame->sample_rate) + frame->nb_samples, // 获取下一个输入样本相对于下一个输出样本将经历的延迟
+        int dst_nb_samples = av_rescale_rnd(swr_get_delay(swr_ctx, frame->sample_rate) +
+                                            frame->nb_samples, // 获取下一个输入样本相对于下一个输出样本将经历的延迟
                                             out_sample_rate, // 输出采样率
                                             frame->sample_rate, // 输入采样率
                                             AV_ROUND_UP); // 先上取 取去11个才能容纳的上
@@ -358,10 +383,14 @@ int AudioChannel::getPCM() { // 此函数会一直被 缓存队列bq 来调用�
                                               frame->nb_samples); // 输入的样本数
 
         // 由于out_buffers 和 dst_nb_samples 无法对应，所以需要重新计算
-        pcm_data_size = samples_per_channel * out_sample_size * out_channels; // 941通道样本数  *  2样本格式字节数  *  2声道数  =3764
+        pcm_data_size = samples_per_channel * out_sample_size *
+                        out_channels; // 941通道样本数  *  2样本格式字节数  *  2声道数  =3764
 
         break;
     }
+
+    av_frame_unref(frame);
+    releaseAVFrame(&frame);
 
     return pcm_data_size;
 }

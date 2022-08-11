@@ -2,6 +2,7 @@
 // Created by lautung on 2022/8/9.
 //
 
+
 #include "VideoChannel.h"
 
 
@@ -23,6 +24,15 @@ void *task_video_decode(void *args) {
 void VideoChannel::video_decode() {
     AVPacket *pkt = nullptr;
     while (isPlaying) {
+
+        /*
+         *
+         */
+        if (isPlaying&&frames.size()>100){
+            av_usleep(10*100);
+            continue;
+        }
+
         int r = packets.getQueueAndDel(pkt); // 阻塞式函数
         if (!isPlaying) {
             break;  // 如果关闭了播放，跳出循环，releaseAVPacket(&pkt);
@@ -34,8 +44,6 @@ void VideoChannel::video_decode() {
 
         r = avcodec_send_packet(codecContext, pkt); // 第一步：把我们的 压缩包 AVPack发送给 FFmpeg缓存区
 
-        // FFmpeg源码内部 缓存了一份pkt副本，所以我才敢大胆的释放
-        releaseAVPacket(&pkt);
 
         if (r) { // r != 0
             break; // avcodec_send_packet出现了错误
@@ -47,12 +55,21 @@ void VideoChannel::video_decode() {
         if (r == AVERROR(EAGAIN)) {
             continue; // B帧 B帧参考前面成功  B帧参考后面失败   可能是P帧还没有出来， 你等等  你再拿一次 可能就拿到了
         } else if (r != 0) {
+            if (frame){
+                releaseAVFrame(&frame);//当出错时，切记要释放frame
+            }
             break; // 出错误了
         }
         // 终于拿到 原始包了，加入队列
         frames.insertToQueue(frame);
+
+        av_packet_free(&pkt);
+//        av_packet_unref(pkt);
+//        releaseAVPacket(&pkt);
+
     } // while end
 
+    av_packet_unref(pkt);
     releaseAVPacket(&pkt);
 }
 
@@ -118,11 +135,14 @@ void VideoChannel::video_play() {
         // 如何渲染一帧图像？
         // 宽，高，数据，数据大小
         // C基础：数组被传递会退出成指针，默认可以去首元素
-        renderCallback(dst_date[0], codecContext->width, codecContext->height,
-                       dst_linesize[0]); // 函数指针的声明
+        renderCallback(dst_date[0], codecContext->width, codecContext->height,dst_linesize[0]); // 函数指针的声明
+
+//        av_frame_free(&frame);
+        av_frame_unref(frame);
         releaseAVFrame(&frame); // 释放原始包，因为已经被渲染了，没用了  1920 * 1080 * 4 =
     } // while end
     // 简单的释放
+    av_frame_unref(frame);
     releaseAVFrame(&frame); // 出现错误，所退出的循环，都要释放frame
     isPlaying = false;
     av_free(&dst_date[0]);

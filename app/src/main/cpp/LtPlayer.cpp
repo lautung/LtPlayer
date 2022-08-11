@@ -4,6 +4,7 @@
 
 
 
+
 #include "LtPlayer.h"
 
 
@@ -161,7 +162,23 @@ void *start_onThread(void *args) {
 
 void LtPlayer::start_() {
     while (playing) {
+        /*
+         * 判断视频packet队列是否大于100，防止 生产者 太快 ，消费者 太慢 导致的内存占用问题。
+         */
+        if (video_channel && video_channel->packets.size() > 100) {
+            av_usleep(10*1000);
+            continue;
+        }
+
+        if (audio_channel && audio_channel->packets.size() > 100) {
+            av_usleep(10*1000);
+            continue;
+        }
+
+        //创建一个 audio或者video的packet. av_packet_alloc为它分配内存空间。
         AVPacket *packet = av_packet_alloc();
+
+        //av_read_frame从 mp4或其它封装格式中读取AVPacket给变量packet。result判断是否成功
         int result = av_read_frame(formatContext, packet);
         if (!result) { //
             if (video_channel && video_channel->stream_index == packet->stream_index) {
@@ -169,16 +186,25 @@ void LtPlayer::start_() {
             } else if (audio_channel && audio_channel->stream_index == packet->stream_index) {
                 audio_channel->packets.insertToQueue(packet);
             }
-        } else if (result > 0) {
+        } else if (result > 0) { // 错误
 //            TODO if (helper) {
 //                helper->onError(THREAD_CHILD, , av_err2str(result))
 //            }
         } else if (result == AVERROR_EOF) {
+            /*
+             * AVERROR_EOF读完了，不代表播放完成
+             */
+            if (video_channel->packets.empty()&&audio_channel->packets.empty()){
+                break;
+            }
 
         } else {
             break;
         }
-    }
+
+
+
+    } // while end
     playing = false;
     if (video_channel) {
         video_channel->stop();

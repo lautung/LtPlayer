@@ -10,6 +10,7 @@
 extern "C" {
 #include <libswscale/swscale.h> // 视频画面像素格式转换的模块
 #include <libavutil/imgutils.h>
+#include <libavutil/time.h>
 };
 
 typedef void(*RenderCallback)(uint8_t *, int, int, int); // 函数指针声明定义

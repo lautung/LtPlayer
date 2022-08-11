@@ -13,6 +13,7 @@
 
 extern "C" {
 #include <libswresample/swresample.h> // 对音频数据进行转换（重采样）
+#include <libavutil/time.h>
 };
 
 class AudioChannel: public BaseChannel{
