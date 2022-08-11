@@ -39,7 +39,7 @@ class MainActivity : AppCompatActivity() {
         player = LtPlayer(this)
         player.setSurfaceView(surfaceView)
         player.setMediaDataSource(
-            File(getExternalFilesDir(""), "demo.mp4").absolutePath
+            File(Environment.getExternalStorageDirectory() ,"demo.mp4").absolutePath
         )
 
         // 准备成功的回调处    <----  C++ 子线程调用的
