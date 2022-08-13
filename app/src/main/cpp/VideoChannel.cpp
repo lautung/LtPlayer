@@ -171,6 +171,7 @@ void VideoChannel::video_play() {
         double time_diff = video_time - audio_time;
 
         if (time_diff > 0) {
+//            LOGI("视频同步音频1！")
             //当视频时间大于音频时间，我们需要控制视频播放慢一点。
             if (time_diff > 1) {
                 //说明：音视频差异巨大，
@@ -181,11 +182,17 @@ void VideoChannel::video_play() {
         } else if (time_diff < 0) {
             //当视频时间小于音频时间，我们需要控制视频播放快一点。
             if (fabs(time_diff) <= 0.05) {
+//                LOGI("视频同步音频2！")
+
                 frames.sync();
+                av_frame_unref(frame);
+                releaseAVFrame(&frame);
+
                 continue;
             }
         } else {
             //已经同步了
+            LOGI("音视频已同步！")
         }
 
         // ANativeWindows 渲染工作
