@@ -14,6 +14,7 @@ template<typename T> // 泛型：存放任意类型
 class SafeQueue {
 private:
     typedef void (*ReleaseCallback)(T *); // 函数指针定义 做回调 用来释放T里面的内容的
+    typedef void (*SyncCallback)(queue <T> &);
 
 public:
     queue <T> queue;
@@ -21,6 +22,7 @@ public:
     pthread_cond_t cond{}; // 等待 和 唤醒
     bool work = false; // 标记队列是否工作
     ReleaseCallback releaseCallback;
+    SyncCallback syncCallback;
 
     SafeQueue() {
         pthread_mutex_init(&mutex, nullptr); // 初始化互斥锁
@@ -127,9 +129,20 @@ public:
     * 设置此函数指针的回调，让外界去释放  value T
     * @param callback
     */
-    void setReleaseCallback(SafeQueue::ReleaseCallback callback) {
+    void setReleaseCallback(ReleaseCallback callback) {
         this->releaseCallback = callback;
     };
+
+    void setSyncCallback(SyncCallback callback){
+        this->syncCallback = callback;
+    }
+
+    void sync(){
+        pthread_mutex_lock(&mutex);
+        syncCallback(queue);
+
+        pthread_mutex_unlock(&mutex);
+    }
 };
 
 

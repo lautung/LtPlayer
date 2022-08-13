@@ -5,8 +5,8 @@
 
 #include "AudioChannel.h"
 
-AudioChannel::AudioChannel(int stream_index, AVCodecContext *codecContext)
-        : BaseChannel(stream_index, codecContext) {
+AudioChannel::AudioChannel(int stream_index, AVCodecContext *codecContext,AVRational time_base)
+        : BaseChannel(stream_index, codecContext,time_base) {
     // 音频三要素
     /*
      * 1.采样率  44100 48000
@@ -383,8 +383,12 @@ int AudioChannel::getPCM() { // 此函数会一直被 缓存队列bq 来调用�
                                               frame->nb_samples); // 输入的样本数
 
         // 由于out_buffers 和 dst_nb_samples 无法对应，所以需要重新计算
-        pcm_data_size = samples_per_channel * out_sample_size *
-                        out_channels; // 941通道样本数  *  2样本格式字节数  *  2声道数  =3764
+        pcm_data_size = samples_per_channel * out_sample_size *out_channels; // 941通道样本数  *  2样本格式字节数  *  2声道数  =3764
+
+        //
+
+
+        this->audio_time =frame->best_effort_timestamp* av_q2d(time_base);
 
         break;
     }

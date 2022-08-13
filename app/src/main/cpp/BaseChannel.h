@@ -8,6 +8,8 @@ extern "C" {
 #include "SafeQueue.h"
 
 class BaseChannel {
+public:
+    AVRational time_base;
 
 public:
     int stream_index; // 音频 或 视频 的下标
@@ -16,13 +18,13 @@ public:
     bool isPlaying = false; // 音频 和 视频 都会有的标记 是否播放
     AVCodecContext *codecContext = 0; // 音频 视频 都需要的 解码器上下文
 
-    BaseChannel(int stream_index, AVCodecContext *codecContext) : stream_index(
-            stream_index), codecContext(codecContext) {
+    BaseChannel(int stream_index, AVCodecContext *codecContext,AVRational time_base) : stream_index(
+            stream_index), codecContext(codecContext) , time_base(time_base){
         packets.setReleaseCallback(releaseAVPacket); // 给队列设置Callback，Callback释放队列里面的数据
         frames.setReleaseCallback(releaseAVFrame); // 给队列设置Callback，Callback释放队列里面的数据
     }
 
-    ~BaseChannel(){
+    ~BaseChannel() {
         packets.clear();
         frames.clear();
     };
@@ -50,7 +52,6 @@ public:
         }
     };
 };
-
 
 
 #endif //DERRYPLAYER_BASECHANNEL_H

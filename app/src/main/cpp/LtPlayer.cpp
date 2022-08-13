@@ -120,11 +120,15 @@ void LtPlayer::prepare_() {
             return;
         }
 
+        AVRational time_base = stream->time_base;
+
         // 从编解码器参数中，获取流的类型 codec_type === 音频 视频
         if (parameters->codec_type == AVMediaType::AVMEDIA_TYPE_AUDIO) { // 音频
-            audio_channel = new AudioChannel(stream_index, codecContext);
+            audio_channel = new AudioChannel(stream_index, codecContext,time_base);
         } else if (parameters->codec_type == AVMediaType::AVMEDIA_TYPE_VIDEO) { // 视频
-            video_channel = new VideoChannel(stream_index, codecContext);
+            AVRational fps_rational = stream->avg_frame_rate;
+            int fps = av_q2d(fps_rational);
+            video_channel = new VideoChannel(stream_index, codecContext,time_base,fps);
             video_channel->setRenderCallback(renderCallback);
         }
 
@@ -218,12 +222,13 @@ void LtPlayer::start_() {
 
 void LtPlayer::start() {
     playing = true;
-    if (video_channel) {
+
+    if (video_channel&&audio_channel) {
+        video_channel->setAudioChannel(audio_channel);
         video_channel->start();
-    }
-    if (audio_channel) {
         audio_channel->start();
     }
+
     // prepare 需要占用大量的资源，不允许占用主线程
     pthread_create(&pid_prepare, nullptr, start_onThread, this);
 }

@@ -6,9 +6,35 @@
 #include "VideoChannel.h"
 
 
-VideoChannel::VideoChannel(int stream_index, AVCodecContext *codecContext) : BaseChannel(
-        stream_index, codecContext) {
+void dropAVFrame(queue<AVFrame *> &q) {
+    if (!q.empty()) {
+        AVFrame *frame = q.front();
+        BaseChannel::releaseAVFrame(&frame);
+        q.pop();
+    }
+}
 
+void dropAVPacket(queue<AVPacket *> &q) {
+    while (!q.empty()) {
+        AVPacket *packet = q.front();
+        /*
+         * 判断是否是关键帧，如果不是关键帧，才能丢帧。
+         */
+        if (packet->flags != AV_PKT_FLAG_KEY) {
+            BaseChannel::releaseAVPacket(&packet);
+            q.pop();
+        } else {
+            break;
+        }
+    }
+}
+
+
+VideoChannel::VideoChannel(int stream_index, AVCodecContext *codecContext, AVRational time_base,
+                           int fps) : BaseChannel(
+        stream_index, codecContext, time_base), fps(fps) {
+    frames.setSyncCallback(dropAVFrame);
+    packets.setSyncCallback(dropAVPacket);
 }
 
 VideoChannel::~VideoChannel() {
@@ -28,8 +54,8 @@ void VideoChannel::video_decode() {
         /*
          *
          */
-        if (isPlaying&&frames.size()>100){
-            av_usleep(10*100);
+        if (isPlaying && frames.size() > 100) {
+            av_usleep(10 * 100);
             continue;
         }
 
@@ -55,7 +81,7 @@ void VideoChannel::video_decode() {
         if (r == AVERROR(EAGAIN)) {
             continue; // B帧 B帧参考前面成功  B帧参考后面失败   可能是P帧还没有出来， 你等等  你再拿一次 可能就拿到了
         } else if (r != 0) {
-            if (frame){
+            if (frame) {
                 releaseAVFrame(&frame);//当出错时，切记要释放frame
             }
             break; // 出错误了
@@ -129,13 +155,48 @@ void VideoChannel::video_play() {
                 dst_linesize
         );
 
+        /*
+         * 视频追音频
+         */
+        double extra_delay = frame->repeat_pict / (2 * fps);
+
+        double fps_delay = 1.0 / fps;
+        double real_delay = fps_delay + extra_delay;
+
+//        av_usleep(real_delay*1000000);
+
+        double video_time = frame->best_effort_timestamp * av_q2d(time_base);
+        double audio_time = audioChannel->audio_time;
+
+        double time_diff = video_time - audio_time;
+
+        if (time_diff > 0) {
+            //当视频时间大于音频时间，我们需要控制视频播放慢一点。
+            if (time_diff > 1) {
+                //说明：音视频差异巨大，
+                av_usleep((real_delay + 2) * 1000000);
+            } else {
+                av_usleep((real_delay + time_diff) * 1000000);
+            }
+        } else if (time_diff < 0) {
+            //当视频时间小于音频时间，我们需要控制视频播放快一点。
+            if (fabs(time_diff) <= 0.05) {
+                frames.sync();
+                continue;
+            }
+        } else {
+            //已经同步了
+        }
 
         // ANativeWindows 渲染工作
         // SurfaceView需要与ANativeWindows建立联系
         // 如何渲染一帧图像？
         // 宽，高，数据，数据大小
         // C基础：数组被传递会退出成指针，默认可以去首元素
-        renderCallback(dst_date[0], codecContext->width, codecContext->height,dst_linesize[0]); // 函数指针的声明
+        renderCallback(dst_date[0], codecContext->width, codecContext->height,
+                       dst_linesize[0]); // 函数指针的声明
+
+
 
 //        av_frame_free(&frame);
         av_frame_unref(frame);
@@ -165,5 +226,10 @@ void VideoChannel::stop() {
 void VideoChannel::setRenderCallback(RenderCallback callback) {
     this->renderCallback = callback;
 }
+
+void VideoChannel::setAudioChannel(AudioChannel *audioChannel) {
+    this->audioChannel = audioChannel;
+}
+
 
 

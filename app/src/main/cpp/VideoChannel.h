@@ -6,6 +6,7 @@
 #define LTPLAYER_VIDEOCHANNEL_H
 
 #include "BaseChannel.h"
+#include "AudioChannel.h"
 
 extern "C" {
 #include <libswscale/swscale.h> // 视频画面像素格式转换的模块
@@ -22,8 +23,13 @@ private:
     pthread_t pid_video_play;
     RenderCallback renderCallback;
 
+    int fps;
+
+    AudioChannel *audioChannel;
+
+
 public:
-    VideoChannel(int stream_index, AVCodecContext *codecContext);
+    VideoChannel(int stream_index, AVCodecContext *codecContext,AVRational time_base,int fps);
 
     virtual ~VideoChannel();
 
@@ -36,6 +42,8 @@ public:
     void video_play();
 
     void setRenderCallback(RenderCallback callback);
+
+    void setAudioChannel(AudioChannel *audioChannel);
 };
 
 #endif

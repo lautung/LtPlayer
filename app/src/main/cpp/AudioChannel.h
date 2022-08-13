@@ -16,19 +16,22 @@ extern "C" {
 #include <libavutil/time.h>
 };
 
-class AudioChannel: public BaseChannel{
+class AudioChannel : public BaseChannel {
 
 private:
     pthread_t pid_audio_decode;
     pthread_t pid_audio_play;
 
 public:
+    double audio_time;
+
+public:
     int out_channels;
     int out_sample_size;
     int out_sample_rate;
     int out_buffers_size;
-    uint8_t *out_buffers = 0;
-    SwrContext *swr_ctx = 0;
+    uint8_t *out_buffers = nullptr;
+    SwrContext *swr_ctx = nullptr;
 
 public:
     // 引擎
@@ -46,7 +49,7 @@ public:
     SLAndroidSimpleBufferQueueItf bqPlayerBufferQueue = 0;
 
 public:
-    AudioChannel(int stream_index, AVCodecContext * codecContext);
+    AudioChannel(int stream_index, AVCodecContext *codecContext,AVRational time_base);
 
     virtual ~AudioChannel();
 
