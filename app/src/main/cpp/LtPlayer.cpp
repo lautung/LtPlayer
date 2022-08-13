@@ -8,6 +8,7 @@
 #include "LtPlayer.h"
 
 
+
 LtPlayer::LtPlayer(const char *data_source, JNICallbakcHelper *helper) {
 //    this->data_source = data_source; //data_source在jni会被释放
     this->data_source = new char[strlen(data_source) + 1];
@@ -32,6 +33,8 @@ void *prepare_onThread(void *args) {
     player->prepare_();
     return nullptr;
 }
+
+
 
 void LtPlayer::prepare_() {
     // 为什么FFmpeg源码，大量使用上下文Context？
@@ -65,6 +68,9 @@ void LtPlayer::prepare_() {
         }
         return;
     }
+
+    this->duration = formatContext->duration / AV_TIME_BASE; //ffmepg的时间必须要使用 avrational来处理。
+
 
     //根据流信息，流的个数，用循环来找
     for (int stream_index = 0;
@@ -124,17 +130,23 @@ void LtPlayer::prepare_() {
 
         // 从编解码器参数中，获取流的类型 codec_type === 音频 视频
         if (parameters->codec_type == AVMediaType::AVMEDIA_TYPE_AUDIO) { // 音频
-            audio_channel = new AudioChannel(stream_index, codecContext,time_base);
+            audio_channel = new AudioChannel(stream_index, codecContext, time_base);
+            if (this->duration != 0) { // 非直播，才有意义把 JNICallbackHelper传递过去
+                audio_channel->setJNICallbakcHelper(helper);
+            }
         } else if (parameters->codec_type == AVMediaType::AVMEDIA_TYPE_VIDEO) { // 视频
 
             //如果是封面流，也是不参与视频的解码。
-            if (stream->disposition&AV_DISPOSITION_ATTACHED_PIC){
+            if (stream->disposition & AV_DISPOSITION_ATTACHED_PIC) {
                 continue;
             }
             AVRational fps_rational = stream->avg_frame_rate;
             int fps = av_q2d(fps_rational);
-            video_channel = new VideoChannel(stream_index, codecContext,time_base,fps);
+            video_channel = new VideoChannel(stream_index, codecContext, time_base, fps);
             video_channel->setRenderCallback(renderCallback);
+            if (this->duration != 0) { // 非直播，才有意义把 JNICallbackHelper传递过去
+                video_channel->setJNICallbakcHelper(helper);
+            }
         }
 
     }//for end
@@ -175,12 +187,12 @@ void LtPlayer::start_() {
          * 判断视频packet队列是否大于100，防止 生产者 太快 ，消费者 太慢 导致的内存占用问题。
          */
         if (video_channel && video_channel->packets.size() > 100) {
-            av_usleep(10*1000);
+            av_usleep(10 * 1000);
             continue;
         }
 
         if (audio_channel && audio_channel->packets.size() > 100) {
-            av_usleep(10*1000);
+            av_usleep(10 * 1000);
             continue;
         }
 
@@ -203,14 +215,13 @@ void LtPlayer::start_() {
             /*
              * AVERROR_EOF读完了，不代表播放完成
              */
-            if (video_channel->packets.empty()&&audio_channel->packets.empty()){
+            if (video_channel->packets.empty() && audio_channel->packets.empty()) {
                 break;
             }
 
         } else {
             break;
         }
-
 
 
     } // while end
@@ -228,7 +239,7 @@ void LtPlayer::start_() {
 void LtPlayer::start() {
     playing = true;
 
-    if (video_channel&&audio_channel) {
+    if (video_channel && audio_channel) {
         video_channel->setAudioChannel(audio_channel);
         video_channel->start();
         audio_channel->start();
@@ -241,4 +252,18 @@ void LtPlayer::start() {
 void LtPlayer::setRenderCallback(RenderCallback callback) {
     this->renderCallback = callback;
 }
+
+int LtPlayer::getDuration() {
+    return duration;
+}
+
+void LtPlayer::setSeek(int i) {
+
+}
+
+long LtPlayer::getThis() {
+    return reinterpret_cast<long>(this);
+}
+
+
 

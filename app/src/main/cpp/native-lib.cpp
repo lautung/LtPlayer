@@ -100,3 +100,23 @@ Java_com_lautung_ltplayer_LtPlayer_setSurfaceNative(JNIEnv *env, jobject thiz, j
 
     pthread_mutex_unlock(&mutex);
 }
+extern "C"
+JNIEXPORT jint JNICALL
+Java_com_lautung_ltplayer_LtPlayer_getDurationNative(JNIEnv *env, jobject thiz, jlong native_obj) {
+    auto *player = reinterpret_cast<LtPlayer *>(native_obj);
+    if (player) {
+        return player->getDuration();
+    }
+    return 0;
+}
+
+
+extern "C"
+JNIEXPORT void JNICALL
+Java_com_lautung_ltplayer_LtPlayer_setSeekNative(JNIEnv *env, jobject thiz, jlong native_obj,
+                                                 jint play_value) {
+    auto *player = reinterpret_cast<LtPlayer *>(native_obj);
+    if (player) {
+        player->setSeek(play_value);
+    }
+}

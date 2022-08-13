@@ -53,6 +53,10 @@ class LtPlayer(lifecycleOwner: LifecycleOwner) : SurfaceHolder.Callback, Lifecyc
 
     }
 
+
+    private var onProgressListener: OnProgressListener? = null
+
+
     private var onPreparedListener: OnPreparedListener? = null // C++层准备情况的接口
 
     private var onErrorListener: OnErrorListener? = null
@@ -62,6 +66,16 @@ class LtPlayer(lifecycleOwner: LifecycleOwner) : SurfaceHolder.Callback, Lifecyc
     private var nativeObj: Long? = null
 
     private var mediaDataSource: String = ""
+
+    val duration: Int get() = getDurationNative(nativeObj!!)
+
+    /**
+     * MainActivity 调用 seek 拖动 ，拖动条控制C++代码
+     */
+    fun setSeek(playProgress: Int) {
+        setSeekNative(nativeObj!!, playProgress)
+    }
+
 
     fun setMediaDataSource(mediaDataSource: String) {
         this.mediaDataSource = mediaDataSource
@@ -125,6 +139,13 @@ class LtPlayer(lifecycleOwner: LifecycleOwner) : SurfaceHolder.Callback, Lifecyc
 
 
     /**
+     * 给jni反射调用的  准备成功
+     */
+    fun onProgress(progress: Int) {
+        onProgressListener?.onProgress(progress)
+    }
+
+    /**
      * 准备OK的监听接口
      */
     interface OnPreparedListener {
@@ -159,6 +180,10 @@ class LtPlayer(lifecycleOwner: LifecycleOwner) : SurfaceHolder.Callback, Lifecyc
 
     private external fun setSurfaceNative(nativeObj: Long, surface: Surface)
 
+    private external fun getDurationNative(nativeObj: Long): Int;
+
+    private external fun setSeekNative(nativeObj: Long, playValue: Int)
+
 
     override fun surfaceCreated(p0: SurfaceHolder) {}
 
@@ -168,5 +193,20 @@ class LtPlayer(lifecycleOwner: LifecycleOwner) : SurfaceHolder.Callback, Lifecyc
 
 
     override fun surfaceDestroyed(p0: SurfaceHolder) {}
+
+
+    /**
+     * 准备播放时进度的监听接口
+     */
+    interface OnProgressListener {
+        fun onProgress(progress: Int)
+    }
+
+    /**
+     * 设置准备播放时进度的监听接口
+     */
+    fun setOnOnProgressListener(onProgressListener: OnProgressListener?) {
+        this.onProgressListener = onProgressListener
+    }
 
 }

@@ -10,6 +10,7 @@
 #include "AudioChannel.h"
 #include "VideoChannel.h"
 #include "JNICallbakcHelper.h"
+#include "log4c.h"
 
 extern "C" {
 #include <libavformat/avformat.h>
@@ -27,6 +28,7 @@ private:
     JNICallbakcHelper *helper;
     bool playing = false;
     RenderCallback renderCallback;
+    int duration = 0;
 
 public:
     LtPlayer(const char *data_source, JNICallbakcHelper *helper);
@@ -45,6 +47,13 @@ public:
 
     void setRenderCallback(RenderCallback callback);
 
+
+    int getDuration();
+
+
+    void setSeek(int i);
+
+    long getThis();
 
 };
 

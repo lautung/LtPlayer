@@ -16,6 +16,7 @@ private:
     jobject job; // 为了更好的寻找到 DerryPlayer.kt实例
     jmethodID jmd_prepared;
     jmethodID jmd_onError;
+    jmethodID jmd_onProgress; // 播放音频的时间搓回调
 
 public:
     JNICallbakcHelper(JavaVM *vm, JNIEnv *env, jobject job);
@@ -24,7 +25,7 @@ public:
 
     void onPrepared(int thread_mode);
     void onError(int thread_mode, int error_code, char * ffmpegError);
-
+    void onProgress(int thread_mode, int audio_time);
 
 };
 

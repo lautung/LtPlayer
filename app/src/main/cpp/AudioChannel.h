@@ -10,11 +10,14 @@
 #include "log4c.h"
 #include <SLES/OpenSLES.h>
 #include <SLES/OpenSLES_Android.h>
+#include "JNICallbakcHelper.h"
 
 extern "C" {
 #include <libswresample/swresample.h> // 对音频数据进行转换（重采样）
 #include <libavutil/time.h>
 };
+
+typedef void (*OnAudioProgress)(int);
 
 class AudioChannel : public BaseChannel {
 
@@ -49,7 +52,7 @@ public:
     SLAndroidSimpleBufferQueueItf bqPlayerBufferQueue = 0;
 
 public:
-    AudioChannel(int stream_index, AVCodecContext *codecContext,AVRational time_base);
+    AudioChannel(int stream_index, AVCodecContext *codecContext, AVRational time_base);
 
     virtual ~AudioChannel();
 
