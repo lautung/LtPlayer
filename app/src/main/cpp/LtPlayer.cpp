@@ -126,6 +126,11 @@ void LtPlayer::prepare_() {
         if (parameters->codec_type == AVMediaType::AVMEDIA_TYPE_AUDIO) { // 音频
             audio_channel = new AudioChannel(stream_index, codecContext,time_base);
         } else if (parameters->codec_type == AVMediaType::AVMEDIA_TYPE_VIDEO) { // 视频
+
+            //如果是封面流，也是不参与视频的解码。
+            if (stream->disposition&AV_DISPOSITION_ATTACHED_PIC){
+                continue;
+            }
             AVRational fps_rational = stream->avg_frame_rate;
             int fps = av_q2d(fps_rational);
             video_channel = new VideoChannel(stream_index, codecContext,time_base,fps);
