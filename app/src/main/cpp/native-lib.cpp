@@ -74,12 +74,30 @@ Java_com_lautung_ltplayer_LtPlayer_startNative(JNIEnv *env, jobject thiz, jlong 
 extern "C"
 JNIEXPORT void JNICALL
 Java_com_lautung_ltplayer_LtPlayer_stopNative(JNIEnv *env, jobject thiz, jlong native_obj) {
-    // TODO: implement stopNative()
+    auto *player = reinterpret_cast<LtPlayer *>(native_obj);
+    if (player) {
+        player->stop();
+    }
 }
 extern "C"
 JNIEXPORT void JNICALL
 Java_com_lautung_ltplayer_LtPlayer_releaseNative(JNIEnv *env, jobject thiz, jlong native_obj) {
-    // TODO: implement releaseNative()
+    auto *player = reinterpret_cast<LtPlayer *>(native_obj);
+
+    pthread_mutex_lock(&mutex);
+
+    // 先释放之前的显示窗口
+    if (aNativeWindow) {
+        ANativeWindow_release(aNativeWindow);
+        aNativeWindow = nullptr;
+    }
+
+    pthread_mutex_unlock(&mutex);
+
+    // 释放工作
+    DELETE(player) // 在堆区开辟的 DerryPlayer.cpp 对象，已经被释放了哦
+    DELETE(vm)
+    DELETE(aNativeWindow)
 }
 
 

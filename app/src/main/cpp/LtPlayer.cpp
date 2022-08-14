@@ -8,7 +8,6 @@
 #include "LtPlayer.h"
 
 
-
 LtPlayer::LtPlayer(const char *data_source, JNICallbakcHelper *helper) {
 //    this->data_source = data_source; //data_source在jni会被释放
     this->data_source = new char[strlen(data_source) + 1];
@@ -35,7 +34,6 @@ void *prepare_onThread(void *args) {
 }
 
 
-
 void LtPlayer::prepare_() {
     // 为什么FFmpeg源码，大量使用上下文Context？
     // 答：因为FFmpeg源码是纯C的，他不像C++、Java ， 上下文的出现是为了贯彻环境，就相当于Java的this能够操作成员
@@ -55,6 +53,7 @@ void LtPlayer::prepare_() {
         if (helper) {
             helper->onError(THREAD_CHILD, FFMPEG_CAN_NOT_OPEN_URL, av_err2str(result));
         }
+        avformat_close_input(&formatContext);
         return;
     }
 
@@ -66,12 +65,13 @@ void LtPlayer::prepare_() {
         if (helper) {
             helper->onError(THREAD_CHILD, FFMPEG_CAN_NOT_FIND_STREAMS, av_err2str(result));
         }
+        avformat_close_input(&formatContext);
         return;
     }
 
     this->duration = formatContext->duration / AV_TIME_BASE; //ffmepg的时间必须要使用 avrational来处理。
 
-
+    AVCodecContext *codecContext = nullptr;
     //根据流信息，流的个数，用循环来找
     for (int stream_index = 0;
          stream_index < formatContext->nb_streams; ++stream_index) { //for start
@@ -92,15 +92,18 @@ void LtPlayer::prepare_() {
             if (helper) {
                 helper->onError(THREAD_CHILD, FFMPEG_FIND_DECODER_FAIL, av_err2str(result));
             }
+            avformat_close_input(&formatContext);
         }
 
         // 编解码器 上下文 （这个才是真正干活的）
-        AVCodecContext *codecContext = avcodec_alloc_context3(codec); // AVCodecContext是一张白纸
+        codecContext = avcodec_alloc_context3(codec); // AVCodecContext是一张白纸
         if (!codecContext) { // codecContext == NULL   非0即true
             // TODO JNI 反射回调到Java方法，并提示
             if (helper) {
                 helper->onError(THREAD_CHILD, FFMPEG_ALLOC_CODEC_CONTEXT_FAIL, av_err2str(result));
             }
+            avcodec_free_context(&codecContext); // 释放此上下文 avcodec 他会考虑到，你不用管*codec
+            avformat_close_input(&formatContext);
             return;
         }
 
@@ -113,6 +116,8 @@ void LtPlayer::prepare_() {
                 helper->onError(THREAD_CHILD, FFMPEG_CODEC_CONTEXT_PARAMETERS_FAIL,
                                 av_err2str(result));
             }
+            avcodec_free_context(&codecContext); // 释放此上下文 avcodec 他会考虑到，你不用管*codec
+            avformat_close_input(&formatContext);
             return;
         }
 
@@ -123,6 +128,8 @@ void LtPlayer::prepare_() {
             if (helper) {
                 helper->onError(THREAD_CHILD, FFMPEG_OPEN_DECODER_FAIL, av_err2str(result));
             }
+            avcodec_free_context(&codecContext); // 释放此上下文 avcodec 他会考虑到，你不用管*codec
+            avformat_close_input(&formatContext);
             return;
         }
 
@@ -159,6 +166,10 @@ void LtPlayer::prepare_() {
         if (helper) {
             helper->onError(THREAD_CHILD, FFMPEG_NOMEDIA, av_err2str(result));
         }
+        if (codecContext) {
+            avcodec_free_context(&codecContext); // 释放此上下文 avcodec 他会考虑到，你不用管*codec
+        }
+        avformat_close_input(&formatContext);
         return;
     }
 
@@ -246,7 +257,7 @@ void LtPlayer::start() {
     }
 
     // prepare 需要占用大量的资源，不允许占用主线程
-    pthread_create(&pid_prepare, nullptr, start_onThread, this);
+    pthread_create(&pid_start, nullptr, start_onThread, this);
 }
 
 void LtPlayer::setRenderCallback(RenderCallback callback) {
@@ -257,13 +268,119 @@ int LtPlayer::getDuration() {
     return duration;
 }
 
-void LtPlayer::setSeek(int i) {
+void LtPlayer::setSeek(int progress) {
+
+
+    // 健壮性判断
+    if (progress < 0 || progress > duration) {
+
+        return;
+    }
+    if (!audio_channel && !video_channel) {
+
+        return;
+    }
+    if (!formatContext) {
+
+        return;
+    }
+
+    // formatContext 多线程， av_seek_frame内部会对我们的 formatContext上下文的成员做处理，安全的问题
+    // 互斥锁 保证多线程情况下安全
+
+    pthread_mutex_lock(&seek_mutex);
+
+    // FFmpeg 大部分单位 == 时间基AV_TIME_BASE
+    /**
+     * 1.formatContext 安全问题
+     * 2.-1 代表默认情况，FFmpeg自动选择 音频 还是 视频 做 seek，  模糊：0视频  1音频
+     * 3. AVSEEK_FLAG_ANY（老实） 直接精准到 拖动的位置，问题：如果不是关键帧，B帧 可能会造成 花屏情况
+     *    AVSEEK_FLAG_BACKWARD（则优  8的位置 B帧 ， 找附件的关键帧 6，如果找不到他也会花屏）
+     *    AVSEEK_FLAG_FRAME 找关键帧（非常不准确，可能会跳的太多），一般不会直接用，但是会配合用
+     */
+    int r = av_seek_frame(formatContext, -1, progress * AV_TIME_BASE, AVSEEK_FLAG_FRAME);
+    if (r < 0) {
+        // TODO 同学们自己去完成，给Java的回调
+        return;
+    }
+
+    // TODO 如果你的视频，假设出了花屏，AVSEEK_FLAG_BACKWARD | AVSEEK_FLAG_FRAME， 缺点：慢一些
+    // 有一点点冲突，后面再看 （则优  | 配合找关键帧）
+    // av_seek_frame(formatContext, -1, progress * AV_TIME_BASE, AVSEEK_FLAG_BACKWARD | AVSEEK_FLAG_FRAME);
+
+    // 音视频正在播放，用户去 seek，我是不是应该停掉播放的数据  音频1frames 1packets，  视频1frames 1packets 队列
+
+    // 这四个队列，还在工作中，让他们停下来， seek完成后，重新播放
+    if (audio_channel) {
+        audio_channel->packets.setWork(0);  // 队列不工作
+        audio_channel->frames.setWork(0);  // 队列不工作
+        audio_channel->packets.clear();
+        audio_channel->frames.clear();
+        audio_channel->packets.setWork(1); // 队列继续工作
+        audio_channel->frames.setWork(1);  // 队列继续工作
+    }
+
+    if (video_channel) {
+        video_channel->packets.setWork(0);  // 队列不工作
+        video_channel->frames.setWork(0);  // 队列不工作
+        video_channel->packets.clear();
+        video_channel->frames.clear();
+        video_channel->packets.setWork(1); // 队列继续工作
+        video_channel->frames.setWork(1);  // 队列继续工作
+    }
+
+    pthread_mutex_unlock(&seek_mutex);
+
 
 }
 
-long LtPlayer::getThis() {
-    return reinterpret_cast<long>(this);
+void *task_stop(void *args) {
+    auto *player = static_cast<LtPlayer *>(args);
+    player->stop_();
+    return nullptr; // 必须返回，坑，错误很难找
 }
+
+void LtPlayer::stop_() {
+    playing = false;
+    pthread_join(pid_prepare, nullptr);
+    pthread_join(pid_start, nullptr);
+
+    // pid_prepare pid_start 就全部停止下来了  稳稳的停下来
+    if (formatContext) {
+        avformat_close_input(&formatContext);
+        avformat_free_context(formatContext);
+        formatContext = nullptr;
+    }
+    DELETE(audio_channel);
+    DELETE(video_channel);
+    auto *ltPlayer = reinterpret_cast<LtPlayer *>(this);
+    DELETE(ltPlayer)
+}
+
+
+void LtPlayer::stop() {
+    // 只要用户关闭了，就不准你回调给Java成 start播放
+    helper = nullptr;
+    if (audio_channel) {
+        audio_channel->jniCallbakcHelper = nullptr;
+    }
+    if (video_channel) {
+        video_channel->jniCallbakcHelper = nullptr;
+    }
+
+
+    // 如果是直接释放 我们的 prepare_ start_ 线程，不能暴力释放 ，否则会有bug
+
+    // 让他 稳稳的停下来
+
+    // 我们要等这两个线程 稳稳的停下来后，我再释放DerryPlayer的所以工作
+    // 由于我们要等 所以会ANR异常
+
+    // 所以我们我们在开启一个 stop_线程 来等你 稳稳的停下来
+    // 创建子线程
+    pthread_create(&pid_stop, nullptr, task_stop, this);
+}
+
 
 
 

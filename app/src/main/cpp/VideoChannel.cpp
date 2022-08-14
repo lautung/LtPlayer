@@ -38,7 +38,7 @@ VideoChannel::VideoChannel(int stream_index, AVCodecContext *codecContext, AVRat
 }
 
 VideoChannel::~VideoChannel() {
-
+    DELETE(audioChannel)
 }
 
 void *task_video_decode(void *args) {
@@ -55,7 +55,7 @@ void VideoChannel::video_decode() {
          *
          */
         if (isPlaying && frames.size() > 100) {
-            av_usleep(10 * 100);
+            av_usleep(10 * 20);
             continue;
         }
 
@@ -179,7 +179,9 @@ void VideoChannel::video_play() {
             } else {
                 av_usleep((real_delay + time_diff) * 1000000);
             }
-        } else if (time_diff < 0) {
+        }
+
+        if (time_diff < 0) {
             //当视频时间小于音频时间，我们需要控制视频播放快一点。
             if (fabs(time_diff) <= 0.05) {
 //                LOGI("视频同步音频2！")
@@ -193,6 +195,7 @@ void VideoChannel::video_play() {
         } else {
             //已经同步了
             LOGI("音视频已同步！")
+            av_usleep(real_delay * 1000000);
         }
 
         // ANativeWindows 渲染工作
@@ -227,7 +230,15 @@ void VideoChannel::start() {
 }
 
 void VideoChannel::stop() {
+    pthread_join(pid_video_decode, nullptr);
+    pthread_join(pid_video_play, nullptr);
 
+    isPlaying = false;
+    packets.setWork(false);
+    frames.setWork(false);
+
+    packets.clear();
+    frames.clear();
 }
 
 void VideoChannel::setRenderCallback(RenderCallback callback) {

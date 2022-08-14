@@ -26,9 +26,14 @@ private:
     AudioChannel *audio_channel = nullptr;
     VideoChannel *video_channel = nullptr;
     JNICallbakcHelper *helper;
+
     bool playing = false;
     RenderCallback renderCallback;
+
     int duration = 0;
+    pthread_mutex_t seek_mutex;
+    pthread_t pid_stop;
+
 
 public:
     LtPlayer(const char *data_source, JNICallbakcHelper *helper);
@@ -53,8 +58,9 @@ public:
 
     void setSeek(int i);
 
-    long getThis();
+    void stop();
 
+    void stop_();
 };
 
 

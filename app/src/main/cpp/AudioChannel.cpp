@@ -62,7 +62,11 @@ AudioChannel::AudioChannel(int stream_index, AVCodecContext *codecContext, AVRat
 }
 
 AudioChannel::~AudioChannel() {
-
+    // TODO 播放器收尾 2
+    if (swr_ctx) {
+        swr_free(&swr_ctx);
+    }
+    DELETE(out_buffers);
 };
 
 void *task_audio_decode(void *args) {
@@ -79,7 +83,7 @@ void AudioChannel::audio_decode() {
         *
         */
         if (isPlaying && frames.size() > 100) {
-            av_usleep(10 * 100);
+            av_usleep(10 * 20);
             continue;
         }
 
@@ -338,7 +342,46 @@ void AudioChannel::start() {
 }
 
 void AudioChannel::stop() {
+    // 等  解码线程  播放线程  全部停止，你再安心的做释放工作
+    pthread_join(pid_audio_decode, nullptr);
+    pthread_join(pid_audio_play, nullptr);
 
+    // 保证两个线程执行完毕，我再释放  稳稳的释放
+
+    isPlaying = false;
+    packets.setWork(false);
+    frames.setWork(false);
+
+    // TODO 7、OpenSLES释放工作
+    // 7.1 设置停止状态
+    if (bqPlayerPlay) {
+        (*bqPlayerPlay)->SetPlayState(bqPlayerPlay, SL_PLAYSTATE_STOPPED);
+        bqPlayerPlay = nullptr;
+    }
+
+    // 7.2 销毁播放器
+    if (bqPlayerObject) {
+        (*bqPlayerObject)->Destroy(bqPlayerObject);
+        bqPlayerObject = nullptr;
+        bqPlayerBufferQueue = nullptr;
+    }
+
+    // 7.3 销毁混音器
+    if (outputMixObject) {
+        (*outputMixObject)->Destroy(outputMixObject);
+        outputMixObject = nullptr;
+    }
+
+    // 7.4 销毁引擎
+    if (engineObject) {
+        (*engineObject)->Destroy(engineObject);
+        engineObject = nullptr;
+        engineInterface = nullptr;
+    }
+
+    // 队列清空
+    packets.clear();
+    frames.clear();
 }
 
 int AudioChannel::getPCM() { // 此函数会一直被 缓存队列bq 来调用，所以 不是靠while循环 先 队列那数据的

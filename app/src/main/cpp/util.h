@@ -21,4 +21,9 @@
 // 没有音视频
 #define FFMPEG_NOMEDIA 8
 
+
+
+// 宏函数
+#define DELETE(object) if (object) { delete object; object = 0;}
+
 #endif //NE_PLAYER_MACRO_H
